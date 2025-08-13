@@ -161,3 +161,53 @@ WHERE dea.continent IS NOT NULL;
 SELECT *
 FROM PercentPopulationVaccinated;
 
+-- FOR TABLEAU
+
+-- QUESTION 1
+SELECT 
+    SUM(CAST(new_cases AS FLOAT)) AS total_cases, 
+    SUM(CAST(new_deaths AS FLOAT)) AS total_deaths, 
+    (SUM(CAST(new_deaths AS FLOAT)) / NULLIF(SUM(CAST(new_cases AS FLOAT)), 0)) * 100 AS DeathPercentage
+FROM PortfolioProject..CovidDeathsMain
+-- WHERE location LIKE '%states%'
+WHERE continent != ' '
+-- GROUP BY date
+ORDER BY 1, 2;
+
+-- QUESTION 2
+
+SELECT location, SUM(CAST(new_deaths as INT)) as TotalDeathCount
+From PortfolioProject..CovidDeathsMain
+--Where location like '%states%'
+WHERE continent = ' '
+and location not in ('World', 'European Union', 'International')
+GROUP BY location
+ORDER BY TotalDeathCount desc
+
+-- QUESTION 3
+SELECT 
+    Location, 
+    CAST(Population AS BIGINT) AS Population, 
+    MAX(CAST(total_cases AS BIGINT)) AS HighestInfectionCount,  
+    MAX(
+        (CAST(total_cases AS FLOAT) / NULLIF(CAST(population AS FLOAT), 0))
+    ) * 100 AS PercentPopulationInfected
+FROM PortfolioProject..CovidDeathsMain
+-- WHERE location LIKE '%states%'
+GROUP BY Location, Population
+ORDER BY PercentPopulationInfected DESC;
+
+-- QUESTION 4
+SELECT 
+    Location, 
+    CAST(Population AS BIGINT) AS Population,
+    Date,
+    MAX(CAST(total_cases AS BIGINT)) AS HighestInfectionCount,  
+    MAX(
+        (CAST(total_cases AS FLOAT) / NULLIF(CAST(population AS FLOAT), 0))
+    ) * 100 AS PercentPopulationInfected
+FROM PortfolioProject..CovidDeathsMain
+-- WHERE location LIKE '%states%'
+GROUP BY Location, Population, Date
+ORDER BY PercentPopulationInfected DESC;
+
