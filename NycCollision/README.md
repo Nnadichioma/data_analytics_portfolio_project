@@ -1,9 +1,5 @@
 # NYC Motor Vehicle Collisions Analysis (Jan–Aug 2020)
 
-[![Last Commit](https://img.shields.io/github/last-commit/Nnadichioma/data_analytics_portfolio_project/NycCollision)](https://github.com/Nnadichioma/data_analytics_portfolio_project/NycCollision) 
-[![License](https://img.shields.io/github/license/Nnadichioma/data_analytics_portfolio_project/NycCollision)](https://github.com/Nnadichioma/data_analytics_portfolio_project/NycCollision/blob/main/LICENSE) 
-[![Dataset](https://img.shields.io/badge/Dataset-Kaggle-blue)](https://www.kaggle.com/datasets/mysarahmadbhat/nyc-traffic-accidents)
-
 This project analyzes **motor vehicle collisions reported by the New York City Police Department** from January to August 2020. The dataset includes individual collision records with information on **date, time, location (borough, zip code, street, latitude/longitude), vehicles and victims involved, and contributing factors**.  
 
 The goal is to **clean, explore, and visualize the data** to answer questions about collision trends, high-risk times and locations, and causes of accidents.
