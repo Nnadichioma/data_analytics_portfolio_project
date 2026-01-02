@@ -230,18 +230,11 @@ ADD CONSTRAINT fk_payer
     FOREIGN KEY (payer) REFERENCES payers_clean(id);
 
 -- Create the procedures clean table
+
 CREATE TABLE procedures_clean AS
 WITH cte AS (
-    SELECT DISTINCT
-        start_time,
-        stop_time,
-        patient,
-        encounter,
-        code,
-        description,
-        base_cost,
-        reasoncode,
-        reasondescription
+    SELECT *,
+           ROW_NUMBER() OVER (PARTITION BY encounter, code ORDER BY start_time) AS rn
     FROM procedures_staging
 )
 SELECT
@@ -254,19 +247,20 @@ SELECT
     base_cost::NUMERIC(10,2) AS base_cost,
     reasoncode,
     reasondescription
-FROM cte;
+FROM cte
+WHERE rn = 1;
 
 ALTER TABLE procedures_clean
-ADD COLUMN procedure_id SERIAL PRIMARY KEY;
+ADD PRIMARY KEY (encounter, code);
 
+-- Foreign Keys
 ALTER TABLE procedures_clean
-ADD CONSTRAINT fk_proc_patient
+ADD CONSTRAINT fk_patient
     FOREIGN KEY (patient) REFERENCES patients_clean(id);
 
 ALTER TABLE procedures_clean
-ADD CONSTRAINT fk_proc_encounter
+ADD CONSTRAINT fk_encounter
     FOREIGN KEY (encounter) REFERENCES encounters_clean(id);
-
 
 -- Data Cleaning
 -- Patients Table
@@ -354,6 +348,14 @@ FROM encounters_clean
 GROUP BY year
 ORDER BY year;
 
+-- INSIGHT:
+-- Total encounters increased steadily from 2011 to 2014, peaking in 2014.
+-- After 2014, encounter volume declined gradually and then stabilized
+-- between 2016 and 2019, with a slight increase again in 2021.
+-- This suggests an initial growth phase in healthcare utilization
+-- followed by a period of stabilization.
+
+
 -- Q1b. For each year, what percentage of all encounters belonged to each encounter class
 -- (ambulatory, outpatient, wellness, urgent care, emergency, and inpatient)?
 
@@ -369,6 +371,17 @@ FROM encounters_clean
 GROUP BY encounterclass, year
 ORDER BY year, percentage DESC;
 
+-- INSIGHT:
+-- Ambulatory encounters consistently account for the largest share of
+-- encounters each year, representing roughly 40–50% of total encounters.
+-- Outpatient encounters are the second most common, contributing about
+-- 20–25% annually.
+-- Emergency and inpatient encounters make up a relatively small but
+-- stable proportion of total encounters, while wellness and urgent care
+-- visits vary moderately across years.
+-- Overall, the encounter mix indicates a strong emphasis on routine
+-- and non-emergency care.
+
 -- Q1c. What percentage of encounters were over 24 hours versus under 24 hours?
 SELECT
     CASE 
@@ -381,6 +394,13 @@ SELECT
 FROM encounters_clean
 GROUP BY duration_category;
 
+-- INSIGHT:
+-- The vast majority of encounters (over 99%) lasted less than 24 hours.
+-- Encounters exceeding 24 hours represent less than 1% of all visits,
+-- indicating that long hospital stays are rare in this dataset.
+-- This suggests that most patient interactions are short-term visits,
+-- such as outpatient, ambulatory, or same-day services.
+
 -- Q2a.  How many encounters had zero payer coverage,
 -- and what percentage of total encounters does this represent?
 SELECT
@@ -392,6 +412,11 @@ SELECT
 FROM encounters_clean
 WHERE payer_coverage = 0;
 
+-- Insight:
+-- Out of all encounters, 13,586 (48.71%) had zero payer coverage.
+-- This indicates that nearly half of all healthcare encounters were not covered by insurance,
+-- suggesting a substantial burden of out-of-pocket costs or uninsured care within the dataset.
+
 -- Q2b. b. What are the top 10 most frequent procedures
 -- performed and the average base cost for each?
 
@@ -400,10 +425,18 @@ SELECT description,
        ROUND(AVG(base_cost), 2) AS avg_base_cost
 FROM procedures_clean
 GROUP BY description
-ORDER BY frequency DESC
+ORDER BY frequency DESC, description ASC
 LIMIT 10;
 
--- Q2c. c. What are the top 10 procedures with the highest average base cost
+-- Insight:
+-- The most frequently performed procedures are primarily routine assessments and screenings,
+-- such as health and social care assessments, depression screenings, and substance use evaluations.
+-- Most of these high-volume procedures have a relatively low and consistent average base cost (~$431),
+-- indicating standardized pricing for common preventive and diagnostic services.
+-- Renal dialysis stands out as a frequent procedure with a significantly higher average base cost,
+-- reflecting the higher resource intensity of this treatment.
+
+-- Q2c. What are the top 10 procedures with the highest average base cost
 -- and the number of times they were performed?
 
 SELECT
@@ -415,6 +448,14 @@ GROUP by description
 ORDER BY avg_base_cost DESC
 LIMIT 10;
 	
+-- Insight:
+-- The procedures with the highest average base cost are highly specialized and intensive treatments,
+-- such as ICU admission, coronary artery bypass grafting, and advanced cardiovascular interventions.
+-- Although these procedures occur far less frequently than routine assessments,
+-- their high individual costs contribute disproportionately to overall healthcare spending.
+-- Electrical cardioversion appears both high-cost and relatively frequent,
+-- making it a notable driver of total procedural expenditure.
+
 -- Q2d. What is the average total claim cost for encounters, broken down by payer?
 
 SELECT
@@ -427,20 +468,36 @@ LEFT JOIN payers_clean p
 GROUP BY p.name
 ORDER BY avg_total_claim_cost DESC;
 
+-- Insight: 
+-- Average total claim costs vary significantly by payer.
+-- The payer with ID 7c4411ce-02f1-39b5-b9ec-dfbea9ad3c1a has the highest average total claim cost (~$6,205),
+-- indicating more expensive encounters or higher reimbursement rates.
+-- Several payers cluster between $2,500–$4,000, suggesting relatively similar cost structures.
+-- The lowest average total claim cost (~$1,696) may reflect coverage focused on less intensive or lower-cost care.
+-- Overall, payer type appears to play a meaningful role in total encounter costs.
 
 -- Q3a. How many unique patients were admitted each quarter over time?
-
 SELECT
-    EXTRACT(YEAR FROM e.start_time) AS year,
-    EXTRACT(QUARTER FROM e.start_time) AS quarter,
-    COUNT(DISTINCT p.id) AS unique_patients_admitted
-FROM encounters_clean e
-JOIN patients_clean p
-    ON e.patient = p.id
-GROUP BY year, quarter
+    EXTRACT(YEAR FROM start_time) AS year,
+    EXTRACT(QUARTER FROM start_time) AS quarter,
+    COUNT(DISTINCT patient) AS unique_patients_admitted
+FROM encounters_clean
+GROUP BY
+    EXTRACT(YEAR FROM start_time),
+    EXTRACT(QUARTER FROM start_time)
 ORDER BY year, quarter;
 
+-- Insight:
+-- The number of unique patients admitted per quarter generally increases from 2011
+-- through 2014, peaking around 2014, which may indicate expanded healthcare utilization
+-- or population growth.
+-- From 2015 to 2020, quarterly admissions remain relatively stable, fluctuating within a narrow range.
+-- A notable spike occurs in early 2021, followed by a decline toward 2022,
+-- which could reflect external factors such as healthcare disruptions or dataset coverage changes.
+-- Overall, admissions show long-term growth with short-term seasonal and annual variation.
+
 -- Q3b. How many patients were readmitted within 30 days of a previous encounter?
+
 WITH ordered_encounters AS (
     SELECT
         patient,
@@ -459,6 +516,11 @@ WHERE
     previous_start IS NOT NULL
     AND start_time - previous_start <= INTERVAL '30 days';
 
+-- Insight:
+-- A total of 772 patients were readmitted within 30 days of a previous encounter.
+-- This indicates a non-trivial level of short-term readmissions,
+-- which may suggest chronic conditions, complications, or gaps in post-discharge care.
+-- Monitoring 30-day readmissions is important, as they are often used as a quality-of-care metric.
 
 -- Q3c. Which patients had the most readmissions?
 
@@ -487,3 +549,11 @@ SELECT
 FROM readmissions
 GROUP BY patient
 ORDER BY readmission_count DESC;
+
+-- Insight:
+-- A small number of patients account for a disproportionately high number of readmissions.
+-- The top patient experienced over 1,300 readmissions, far exceeding others.
+-- This concentration suggests the presence of high-utilization patients,
+-- potentially driven by chronic illness, long-term care needs, or frequent treatment regimens.
+-- Targeted care management or intervention programs for these patients
+-- could significantly reduce overall readmission volume.
